@@ -1,16 +1,16 @@
 const StarNotary = artifacts.require('StarNotary')
 
 contract('StarNotary', accounts => {
-    let defaultAccount = account[0];
+    let defaultAccount = accounts[0];
     let user1 = accounts[1];
 
 
     let initStar = {
-        name: "Awesome Star!",
-        dec: "dec",
-        mag: "mag",
-        cent: "cent",
-        story: "Story of my life"
+        name: "Star power 103!",
+        cent: "ra_032.155",
+        dec: "dec_121.874",
+        mag: "mag_245.978",
+        story: "I love my wonderful star"
     }
 
     let tokenId = 1
@@ -21,7 +21,7 @@ contract('StarNotary', accounts => {
     })
 
     describe('can create a star', () => {
-        it('can create a star and get its name', async function () {
+        it('can create a star and get its star properties', async function () {
             // let tokenId = 1
 
             await this.contract.createStar(
@@ -40,6 +40,17 @@ contract('StarNotary', accounts => {
             assert.equal(star[3], initStar.cent)
             assert.equal(star[4], initStar.story)
         })
+
+        it ("adding stars with same coordinates should throw an error", async function() {
+            expectThrow(this.contract.createStar(initStar.name,
+                initStar.dec,
+                initStar.mag,
+                initStar.cent,
+                initStar.story,
+                tokenId + 2, {
+                    from: defaultAccount
+                }))
+        })
     })
 
     describe('buying and selling stars', () => {
@@ -51,7 +62,11 @@ contract('StarNotary', accounts => {
         let starPrice = web3.toWei(.01, "ether")
 
         beforeEach(async function () {
-            await this.contract.createStar('awesome star', starId, {
+            await this.contract.createStar(initStar.name,
+                initStar.dec,
+                initStar.mag,
+                initStar.cent,
+                initStar.story, starId, {
                 from: user1
             })
         })
@@ -115,4 +130,49 @@ contract('StarNotary', accounts => {
             })
         })
     })
+
+    describe("check if star exist", () => {
+        it ("should find existing star", async function() {
+            await this.contract.createStar(
+                initStar.name,
+                initStar.dec,
+                initStar.mag,
+                initStar.cent,
+                initStar.story,
+                tokenId, {
+                    from: defaultAccount
+                })
+            assert.equal(await this.contract.checkIfStarExist(initStar.dec, initStar.mag, initStar.cent, {from: defaultAccount}), true)
+        })
+    })
+    describe("tokentoStarInfo", () => {
+        it("should return the star info", async function() {
+            await this.contract.createStar(
+                initStar.name,
+                initStar.dec,
+                initStar.mag,
+                initStar.cent,
+                initStar.story,
+                tokenId, {
+                    from: defaultAccount
+                })
+            var starInfo = await this.contract.tokenIdToStarInfo(tokenId);
+
+            assert.equal(starInfo[0], initStar.name)
+            assert.equal(starInfo[1], initStar.dec)
+            assert.equal(starInfo[2], initStar.mag)
+            assert.equal(starInfo[3], initStar.cent)
+            assert.equal(starInfo[4], initStar.story)
+        })
+    })
 })
+
+var expectThrow = async function(promise) {
+    try {
+        await promise;
+    }catch(error){
+        assert.exists(error);
+        return;
+    }
+    //assert.fail("Expected error, but didn't see one");
+}
