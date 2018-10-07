@@ -2,10 +2,10 @@ import React, { Component } from 'react';
 import './App.css';
 import Web3 from 'web3';
 import { Form, Text, TextArea, } from 'react-form';
-
+console.log(window.web3)
 const CONTRACT_ABI = require('./utils/contract.abi.json');
 //const CONTRACT_ADDRESS = "0xcdce1863ea2ba3d94c2d4fcfc6d90b36112c6fa2";
-const deploy_address = "0x6dfd8297015754fb28155cf0465186277dfa85da"
+const deploy_address = "0x67f26B1c2781401529beA2bd038257c6520610b6"
 
 class App extends Component {
   constructor(props) {
@@ -16,8 +16,12 @@ class App extends Component {
       ownerStars: null,
       currentStars: null
     }
-    
-    this.web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:8545"))
+    this.web3 = null;
+    if (window.web3 !== 'undefined') {
+      this.web3 = new Web3(window.web3.currentProvider);
+    } else {
+      this.web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:8545"))
+    }
     
     // test account
     //this.account = web3.eth.defaultAccount = web3.eth.accounts[0];
@@ -27,22 +31,14 @@ class App extends Component {
   
   componentWillMount () {
     if (this.web3 && this.web3.isConnected()) {
-      //if (this.web3 === undefined) {
-      this.web3 = new Web3(this.web3.currentProvider);
-      
+      console.log(this.web3)
 
       this.setState({isConnected: true})
-      if (this.web3.net.listening) {
-        this.setState({peers: this.web3.net.peerCount})
-      }
-      this.setState({version: this.web3.version.node})
-
+    
       this.web3.eth.defaultAccount = this.web3.eth.accounts[4]
       this.StarNotary = this.web3.eth.contract(CONTRACT_ABI)
       this.starNotary = this.StarNotary.at(deploy_address);
 
-      const gasPrice = this.web3.eth.gasPrice.toNumber()
-      console.log("gasPrice", gasPrice)
     }
   }
   async loadingStars() {
@@ -54,6 +50,7 @@ class App extends Component {
   }
   componentDidMount() {
     this.loadingStars()
+    console.log("stars", this.state.currentStars)
   }
   createStar({name, dec, mag, cent, story}, tokenId, account) {
     console.log(name, dec, mag, cent, story, tokenId, account)
@@ -70,9 +67,9 @@ class App extends Component {
       })
     })
   }
-  putStarForSale(id, price, account) {
+  putStarUpForSale(id, price, account) {
     return new Promise((resolve, reject) => {
-      this.starNotary.putStarForSale(id, this.web3.toWei(price), {from: account}, (error, result) => {
+      this.starNotary.putStarUpForSale(id, this.web3.toWei(price), {from: account}, (error, result) => {
         if (error) {
           reject(error);
         }else {
@@ -93,20 +90,23 @@ class App extends Component {
     })
   }
   starsForSale (tokenId) {
-    return new Promise((reject, resolve) => {
+    return new Promise((resolve, reject) => {
       this.starNotary.starsForSale(tokenId, (error, result) => {
         if (error) {reject(error)}
         else {resolve(result)}
       })
     })
   }
-  getStarsInfo(value, filter={fromBlock: 0, toBlock: 'latest'}) {
-    return new Promise((reject, resolve) => {
+  getStarsInfo(value = {}, filter={ fromBlock: 0, toBlock: "latest"}) {
+    return new Promise((resolve, reject) => {
       try {
         let starEvent = this.starNotary.Transfer(value, filter)
+        console.log(starEvent)
         starEvent.get(async (error, events) => {
-          if (error) reject(error);
-          else {
+          console.log(error, events)
+          if (error){ 
+            reject(error);
+          }else {
             let idsAdded = {}
             let stars = []
             events = events.reverse()
@@ -115,13 +115,13 @@ class App extends Component {
               let _tokenId = Number(event.args._tokenId)
               if (idsAdded[_tokenId]) continue;
               let star = await this.tokenIdToStarInfo(_tokenId)
-              let starPrice = await this.starsForSale(_tokenId)
-              let starOwner = await this.starOwner(_tokenId)
-
+              //let starPrice = await this.starsForSale(_tokenId)
+              let starOwner = await this.ownerOf(_tokenId)
+              console.log("xxxxxxxx")
               stars.push({
                 star, 
                 id: _tokenId, 
-                price: Number(this.web3.fromWei(starPrice, "ether")), 
+                //price: Number(this.web3.fromWei(starPrice, "ether")), 
                 owner: starOwner
               })
               idsAdded[_tokenId] = true;
@@ -136,8 +136,9 @@ class App extends Component {
       }
     })
   }
-  handleSubmit = (submittedValues) => {    
-    this.createStar(submittedValues, Date.now(), this.web3.eth.accounts[4]).then((error, result) => {
+  handleSubmit = (submittedValues) => {
+    console.log(this.web3.eth.accounts)    
+    this.createStar(submittedValues, Date.now(), this.web3.eth.accounts[0]).then((error, result) => {
       console.log("createStar", error, result)
       if (!error) {
         console.log(result)
@@ -159,10 +160,15 @@ class App extends Component {
     return this.getStarsInfo();
   }
   ownerOf(tokenId) {
-    return new Promise((reject, resolve) => {
+    return new Promise((resolve, reject) => {
       this.starNotary.ownerOf(tokenId, (error, result) => {
-        if(error) {reject(error)}
-        else {resolve(result)}
+        if(error) {
+          reject(error)
+        }
+        else {
+          //console.log(error, result)
+          resolve(result)
+        }
       })
     })
   }
@@ -179,7 +185,7 @@ class App extends Component {
   }
   async sellStar(star, price) {
     //e.preventDefault();
-    const transactionReceipt = await this.putStarForSale(star.id, price);
+    const transactionReceipt = await this.putStarUpForSale(star.id, price, this.web3.eth.accounts[0]);
     this.getTransactionReceipt(transactionReceipt)
   }
   handleSellStar = (star, price) => {
@@ -222,10 +228,10 @@ class App extends Component {
       <h4>List the stars</h4>
         {this.state.loading ? <div>Loading stars</div> : <div> {
           
-          this.state.currentStars && this.state.currentStars.map((star, index) => {
+          this.state.currentStars && this.state.currentStars.map((result, index) => {
             return <div key={index}>
-            {star}
-            <Form onSubmit={(value) => this.handleSellStar(star, value.price)}>
+            <span>Star name: </span>{result.star[0]}
+            <Form onSubmit={(value) => this.handleSellStar(result, value.price)}>
               {formApi => (
                 <form onSubmit={formApi.submitForm} id="form2">
                   <div>
